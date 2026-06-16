@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Sur-Ron Wheelie Life</title>
+    <style>
+        body { margin: 0; background: #111; color: #fff; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; user-select: none; }
+        #gameCanvas { background: linear-gradient(#141e30, #243b55); box-shadow: 0 15px 35px #000; border: 4px solid #333; border-radius: 8px; max-width: 100%; }
+        .btn-container { display: flex; gap: 10px; margin-top: 10px; width: 100%; max-width: 850px; }
+        .game-btn { background: #222; color: #ccff00; border: 3px solid #ccff00; padding: 12px; font-size: 16px; font-weight: bold; border-radius: 10px; cursor: pointer; flex: 1; text-align: center; touch-action: manipulation; }
+        .game-btn:active, .stunt-btn.active { background: #ccff00; color: #000; }
+        .stunt-btn { border-color: #00d2d3; color: #00d2d3; }
+    </style>
+</head>
+<body>
+    <h1 style="margin:5px; color:#ccff00; text-shadow: 2px 2px #000;">SUR-RON WHEELIE LIFE</h1>
+    <canvas id="gameCanvas" width="850" height="500"></canvas>
+    <div class="btn-container"><div id="btnBrake" class="game-btn">🛑 BRAKE (A)</div><div id="btnGas" class="game-btn">⚡ THROTTLE (D)</div></div>
+    <div class="btn-container"><div id="btnE" class="game-btn stunt-btn">🖐️ ONE-HAND (E)</div><div id="btnR" class="game-btn stunt-btn">🧎 KNEE (R)</div><div id="btnT" class="game-btn stunt-btn">🧍 SEAT STAND (T)</div></div>
+<script>
+const canvas = document.getElementById("gameCanvas"), ctx = canvas.getContext("2d");
+let score = 0, highScore = 0, distance = 0, gameOver = false, gameOverTimer = 0, leanAngle = 0, currentStunt = "NONE";
+const keys = { right: false, left: false, e: false, r: false, t: false }, bike = { rx: 200, ry: 404, speed: 0, angle: 0, angleV: 0, wheelRotation: 0 };
+
+const handleKey = (e, isDown) => {
+    const k = e.key.toLowerCase();
+    if (k === "arrowright" || k === "d") keys.right = isDown;
+    if (k === "arrowleft" || k === "a") keys.left = isDown;
+    if (["e", "r", "t"].includes(k)) {
+        keys[k] = isDown;
+        const btn = document.getElementById("btn" + k.toUpperCase());
+        if(btn) { if(isDown) btn.classList.add("active"); else btn.classList.remove("active"); }
+    }
+    if (gameOver && gameOverTimer > 30 && isDown) resetGame();
+};
+window.addEventListener("keydown", e => handleKey(e, true)); window.addEventListener("keyup", e => handleKey(e, false));
+
+const bindBtn = (id, flag) => {
+    const btn = document.getElementById(id);
+    if(!btn) return;
+    ['mousedown', 'touchstart'].forEach(ev => btn.addEventListener(ev, e => { e.preventDefault(); if(gameOver) resetGame(); else keys[flag] = true; }));
+    ['mouseup', 'touchend', 'mouseleave'].forEach(ev => btn.addEventListener(ev, () => keys[flag] = false));
+};
+bindBtn("btnGas", "right"); bindBtn("btnBrake", "left"); bindBtn("btnE", "e"); bindBtn("btnR", "r"); bindBtn("btnT", "t");
+
+function resetGame() { bike.angle = bike.angleV = bike.speed = score = gameOverTimer = leanAngle = 0; currentStunt = "NONE"; Object.keys(keys).forEach(k => keys[k] = false); document.querySelectorAll(".game-btn").forEach(b => b.classList.remove("active")); gameOver = false; }
+
+function updateGame() {
+    if (gameOver) { gameOverTimer++; return; }
+    bike.speed = keys.right ? Math.min(bike.speed + 0.18, 14) : bike.speed * 0.97;
+    if (keys.left) bike.speed = Math.max(bike.speed - 0.28, 0);
+    distance += bike.speed; bike.wheelRotation += bike.speed * 0.04;
+    bike.angleV = ((keys.right && bike.speed > 0.5 ? bike.angleV + 0.0042 : bike.angleV) - (keys.left ? 0.0075 : 0) - 0.0028) * 0.98;
+    bike.angle = Math.max(bike.angle + bike.angleV, 0); if (bike.angle === 0) bike.angleV = 0;
+    leanAngle += ((keys.right ? -0.22 : keys.left ? 0.25 : 0) - leanAngle) * 0.12;
+
+    let deg = bike.angle * 180 / Math.PI;
+    if (deg > 12 && deg < 85 && bike.speed > 1) {
+        score++; if (score > highScore) highScore = score;
+        if (keys.e) currentStunt = "ONE HANDER";
+        else if (keys.r) currentStunt = "KNEE ON SEAT";
+        else if (keys.t) currentStunt = "STAND ON SEAT";
+        else currentStunt = "STANDARD WHEELIE";
+    } else currentStunt = "NONE";
+    if (deg > 88) gameOver = true;
+}
+
+function drawGame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#1e272e"; ctx.fillRect(0, 430, canvas.width, 70);
+    ctx.fillStyle = "#ccff00"; ctx.fillRect(0, 430, canvas.width, 4);
+    ctx.fillStyle = "#333"; for (let x = -(distance % 80); x < canvas.width; x += 80) ctx.fillRect(x, 460, 40, 5);
+
+    ctx.save(); ctx.translate(bike.rx, bike.ry); ctx.rotate(-bike.angle);
+    ctx.strokeStyle = "#555"; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(39,-21); ctx.stroke();
+    ctx.fillStyle = "#222"; ctx.fillRect(21, -48, 35, 42); ctx.strokeStyle = "#333"; ctx.lineWidth = 3; ctx.strokeRect(21, -48, 35, 42);
+    ctx.strokeStyle = "#ccff00"; ctx.lineWidth = 7; ctx.lineCap = ctx.lineJoin = "round";
+    ctx.beginPath(); ctx.moveTo(35,-21); ctx.lineTo(21,-56); ctx.lineTo(62,-59); ctx.lineTo(35,-21); ctx.stroke();
+    ctx.strokeStyle = "#ccff00"; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(21,-56); ctx.lineTo(-3,-64); ctx.stroke();
+    ctx.fillStyle = "#000"; ctx.beginPath(); ctx.moveTo(-7,-67); ctx.lineTo(25,-59); ctx.lineTo(21,-66); ctx.closePath(); if(currentStunt !== "KNEE ON SEAT") ctx.fill();
+    ctx.strokeStyle = "#000"; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(62,-59); ctx.lineTo(91,0); ctx.stroke();
+    ctx.strokeStyle = "#555"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(62,-59); ctx.lineTo(59,-78); ctx.lineTo(48,-81); ctx.stroke();
+
+    let footX = 35, footY = -21, hipX = 16 + (leanAngle * 12), hipY = -66, shoulderX = 24 + (leanAngle * 38), shoulderY = -102 + (Math.abs(leanAngle) * 4), handX = 49, handY = -81;
+    if (currentStunt === "STAND ON SEAT") { footX = 10; footY = -66; hipX = 20 + (leanAngle * 8); hipY = -104; shoulderX = 42 + (leanAngle * 10); shoulderY = -132; }
+    else if (currentStunt === "KNEE ON SEAT") { footX = 14; footY = -65; hipX = 8 + (leanAngle * 10); hipY = -78; shoulderX = 18 + (leanAngle * 30); shoulderY = -112; }
+
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(footX, footY);
+    if (currentStunt === "STAND ON SEAT") ctx.lineTo((footX + hipX)/2 + 2, (footY + hipY)/2);
+    else if (currentStunt === "KNEE ON SEAT") ctx.lineTo(26, -42);
+    else ctx.lineTo(Math.min(hipX, footX) + 11, (hipY + footY) / 2 - 4);
+    ctx.lineTo(hipX, hipY); ctx.stroke();
+   
+    ctx.strokeStyle = "#ff3838"; ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(hipX, hipY); ctx.lineTo(shoulderX, shoulderY); ctx.stroke();
+    ctx.strokeStyle = "#ff3838"; ctx.lineWidth = 4.5; ctx.beginPath(); ctx.moveTo(shoulderX, shoulderY);
+    if (currentStunt === "ONE HANDER") ctx.lineTo(shoulderX - 18, shoulderY - 12);
+    else if (currentStunt === "STAND ON SEAT") { ctx.lineTo((shoulderX + handX) / 2 + 1, (shoulderY + handY) / 2); ctx.lineTo(handX, handY); }
+    else { ctx.lineTo((shoulderX + handX) / 2 + 6, (shoulderY + handY) / 2 + 5); ctx.lineTo(handX, handY); } ctx.stroke();
+
+    let headX = shoulderX + 2, headY = (currentStunt === "STAND ON SEAT") ? shoulderY - 10 : shoulderY - 13;
+    ctx.fillStyle = "#ccff00"; ctx.beginPath(); ctx.arc(headX, headY, 10.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#222"; ctx.beginPath(); ctx.arc(headX, headY, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#222"; ctx.lineWidth = 4.5; ctx.beginPath(); ctx.moveTo(headX - 1, headY + 3); ctx.lineTo(headX + 9, headY + 4); ctx.stroke();
+    ctx.fillStyle = "#00d2d3"; ctx.fillRect(headX + 2, headY - 4, 7, 4);
+
+    drawWheel(91, 0); drawWheel(0, 0); ctx.restore();
+
+    ctx.fillStyle = "#fff"; ctx.font = "bold 22px sans-serif"; ctx.fillText(`SCORE: ${score}`, 25, 45); ctx.fillText(`HI-SCORE: ${highScore}`, 25, 75);
+    if (currentStunt !== "NONE") { ctx.fillStyle = currentStunt === "STANDARD WHEELIE" ? "#ccff00" : "#00d2d3"; ctx.font = currentStunt === "STANDARD WHEELIE" ? "bold 16px sans-serif" : "italic bold 28px sans-serif"; ctx.fillText(currentStunt === "STANDARD WHEELIE" ? "WHEELIE IN PROGRESS (HOLD E, R, T FOR STUNTS)" : `💥 ${currentStunt}!`, 25, 120); }
+
+    if (gameOver) {
+        ctx.fillStyle = "rgba(0,0,0,0.85)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#e74c3c"; ctx.font = "bold 36px Arial"; ctx.textAlign = "center";
+        ctx.fillText("CRASHED! BACKFLIPPED", canvas.width / 2, 230); ctx.fillStyle = "#fff"; ctx.font = "18px Arial"; ctx.fillText("Tap Any Button to Restart", canvas.width / 2, 270); ctx.textAlign = "left";
+    }
+}
+
+function drawWheel(wx, wy) {
+    ctx.save(); ctx.translate(wx, wy); ctx.rotate(bike.wheelRotation); ctx.fillStyle = "#0a0a0a"; ctx.strokeStyle = "#444"; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, 26, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.stroke();
+    for(let a=0; a<Math.PI*2; a+=Math.PI/4) { ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*17, Math.sin(a)*17); ctx.stroke(); } ctx.restore();
+}
+
+(function loop() { updateGame(); drawGame(); requestAnimationFrame(loop); })();
+</script>
+</body>
+</html>
